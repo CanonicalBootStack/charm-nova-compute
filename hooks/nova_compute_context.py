@@ -142,6 +142,8 @@ def expand_net_devs(whitelist, devicelist):
         if 'devname' in ds:
             devpattern = ds['devname']  # ignore 'address' entries
             m = matches(devpattern, devicelist)
+            log(("Matched {} devices for pattern {}, out of "
+                 "total: {}").format(m, devpattern, devicelist))
             if len(m) != 1:
                 raise Exception(
                     "Need exactly 1 match for {} in device list {}".format(
@@ -149,6 +151,7 @@ def expand_net_devs(whitelist, devicelist):
                 )
             ds['devname'] = m[0]
     res = json.dumps(wlist)
+    log("Expanded pci passthrough: {}". format(res))
     return res
 
 
