@@ -249,7 +249,9 @@ class NovaComputeLibvirtContext(context.OSContextGenerator):
         if config('pci-passthrough-whitelist'):
             ctxt['pci_passthrough_whitelist_expanded'] = \
                 expand_net_devs(
-                    config('pci-passthrough-whitelist'))
+                    config('pci-passthrough-whitelist'),
+                    get_net_dev(),
+                )
 
         if config('vcpu-pin-set'):
             ctxt['vcpu_pin_set'] = config('vcpu-pin-set')
