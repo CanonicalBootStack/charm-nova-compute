@@ -15,6 +15,8 @@
 import uuid
 import os
 import platform
+import re
+import json
 
 from charmhelpers.core.unitdata import kv
 from charmhelpers.contrib.openstack import context
@@ -113,6 +115,39 @@ def _neutron_url(rid, unit):
                 relation_get('quantum_url', rid=rid, unit=unit))
 
 
+def get_net_dev():
+    return os.listdir('/sys/class/net')
+
+def matches(pattern, strings):
+    '''
+    >>> matches(r'eth', ['eth1', 'veth', 'br1'])
+    ['eth1', 'veth']
+    '''
+    regexp = re.compile(pattern)
+    l = [ s for s in strings if regexp.search(s)]
+    return l
+
+
+def expand_net_devs(whitelist, devicelist):
+    '''
+    >>> expand_net_devs('[{"devname": "eno2", "physical_network": "physnet1"}, {"devname": "enp13.s0f1", "physical_network": "physnet2"}]',
+    ...   ['eno2', 'enp139s0f1', 'bond1'])
+    '[{"devname": "eno2", "physical_network": "physnet1"}, {"devname": "enp139s0f1", "physical_network": "physnet2"}]'
+    '''
+    wlist = json.loads(whitelist)
+    for ds in wlist:
+        if ds.has_key('devname'):
+            devpattern = ds['devname'] # ignore 'address' entries
+            m = matches(devpattern, devicelist)
+            if len(m) != 1:
+                raise Exception(
+                    "Need exactly 1 match for {} in device list {}".format(
+                        devpattern, devicelist)
+                )
+            ds['devname'] = m[0] 
+    res = json.dumps(wlist)
+    return res
+
 def nova_metadata_requirement():
     enable = False
     secret = None
@@ -194,8 +229,9 @@ class NovaComputeLibvirtContext(context.OSContextGenerator):
             ctxt['kvm_hugepages'] = 0
 
         if config('pci-passthrough-whitelist'):
-            ctxt['pci_passthrough_whitelist'] = \
-                config('pci-passthrough-whitelist')
+            ctxt['pci_passthrough_whitelist_expanded'] = \
+                expand_net_devs(
+                    config('pci-passthrough-whitelist'))
 
         if config('vcpu-pin-set'):
             ctxt['vcpu_pin_set'] = config('vcpu-pin-set')
