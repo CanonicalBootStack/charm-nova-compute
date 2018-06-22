@@ -558,8 +558,10 @@ class NovaComputeUtilsTests(CharmTestCase):
     @patch.object(utils, 'check_output')
     def test_create_libvirt_key_existing(self, _check_output, _check_call):
         key = 'AQCR2dRUaFQSOxAAC5fr79sLL3d7wVvpbbRFMg=='
+        old_key = 'AQCR2dRUaFQSOxAAC5fr79sLL3d7wVvpbbRFMg==\n'
         self.test_config.set('virt-type', 'kvm')
-        _check_output.side_effect = [compute_context.CEPH_SECRET_UUID, key]
+        _check_output.side_effect = [compute_context.CEPH_SECRET_UUID,
+                                     old_key]
         utils.create_libvirt_secret(utils.CEPH_SECRET,
                                     compute_context.CEPH_SECRET_UUID, key)
         expected = [call(['virsh', '-c',
@@ -568,6 +570,7 @@ class NovaComputeUtilsTests(CharmTestCase):
                           utils.LIBVIRT_URIS['kvm'], 'secret-get-value',
                           compute_context.CEPH_SECRET_UUID])]
         _check_output.assert_has_calls(expected)
+        self.assertFalse(_check_call.called)
 
     @patch.object(utils, 'check_call')
     @patch.object(utils, 'check_output')

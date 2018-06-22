@@ -36,6 +36,7 @@ from charmhelpers.core.hookenv import (
     service_name,
     unit_get,
     ERROR,
+    INFO,
 )
 from charmhelpers.contrib.openstack.utils import (
     get_host_ip,
@@ -234,6 +235,16 @@ class NovaComputeLibvirtContext(context.OSContextGenerator):
             ctxt['kvm_hugepages'] = 1
         else:
             ctxt['kvm_hugepages'] = 0
+
+        if config('ksm') in ("1", "0",):
+            ctxt['ksm'] = config('ksm')
+        else:
+            if release < 'kilo':
+                log("KSM set to 1 by default on openstack releases < kilo",
+                    level=INFO)
+                ctxt['ksm'] = "1"
+            else:
+                ctxt['ksm'] = "AUTO"
 
         if config('pci-passthrough-whitelist'):
             ctxt['pci_passthrough_whitelist_expanded'] = \
@@ -680,6 +691,7 @@ class NovaComputeAppArmorContext(context.AppArmorContext):
         super(NovaComputeAppArmorContext, self).__call__()
         if not self.ctxt:
             return self.ctxt
+        self._ctxt.update({'virt_type': config('virt-type')})
         self._ctxt.update({'aa_profile': self.aa_profile})
         return self.ctxt
 

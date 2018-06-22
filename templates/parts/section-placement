@@ -16,3 +16,6 @@ password = {{ admin_password }}
 {% if region -%}
 os_region_name = {{ region }}
 {% endif -%}
+{% if use_internal_endpoints -%}
+os_interface = internal
+{% endif -%}

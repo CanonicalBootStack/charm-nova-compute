@@ -210,6 +210,18 @@ def format_ipv6_addr(address):
     return None
 
 
+def is_ipv6_disabled():
+    try:
+        result = subprocess.check_output(
+            ['sysctl', 'net.ipv6.conf.all.disable_ipv6'],
+            stderr=subprocess.STDOUT)
+    except subprocess.CalledProcessError:
+        return True
+    if six.PY3:
+        result = result.decode('UTF-8')
+    return "net.ipv6.conf.all.disable_ipv6 = 1" in result
+
+
 def get_iface_addr(iface='eth0', inet_type='AF_INET', inc_aliases=False,
                    fatal=True, exc_list=None):
     """Return the assigned IP address for a given interface, if any.

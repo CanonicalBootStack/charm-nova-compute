@@ -50,6 +50,8 @@ requires:
   ephemeral-backend:
     interface: ephemeral-backend
     scope: container
+  ceph-access:
+    interface: cinder-ceph-key
 peers:
   compute-peer:
     interface: nova

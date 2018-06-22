@@ -51,6 +51,7 @@ TO_PATCH = [
     'service_name',
     'related_units',
     'unit_get',
+    'remote_service_name',
     # charmhelpers.core.host
     'apt_install',
     'apt_purge',
@@ -96,6 +97,8 @@ TO_PATCH = [
     'uuid',
     # unitdata
     'unitdata',
+    # templating
+    'render',
 ]
 
 
@@ -520,10 +523,14 @@ class NovaComputeRelationsTests(CharmTestCase):
             'Could not create ceph keyring: peer not ready?'
         )
 
+    @patch.object(hooks, 'mark_broker_action_done')
+    @patch.object(hooks, 'is_broker_action_done')
     @patch('nova_compute_context.service_name')
     @patch.object(hooks, 'CONFIGS')
     def test_ceph_changed_with_key_and_relation_data(self, configs,
-                                                     service_name):
+                                                     service_name,
+                                                     is_broker_action_done,
+                                                     mark_broker_action_done):
         self.test_config.set('libvirt-image-backend', 'rbd')
         self.is_request_complete.return_value = True
         self.assert_libvirt_rbd_imagebackend_allowed.return_value = True
@@ -532,7 +539,9 @@ class NovaComputeRelationsTests(CharmTestCase):
         configs.write = MagicMock()
         service_name.return_value = 'nova-compute'
         self.ensure_ceph_keyring.return_value = True
+        is_broker_action_done.return_value = False
         hooks.ceph_changed()
+        self.assertTrue(mark_broker_action_done.called)
         ex = [
             call('/var/lib/charm/nova-compute/ceph.conf'),
             call('/etc/ceph/secret.xml'),
@@ -540,6 +549,11 @@ class NovaComputeRelationsTests(CharmTestCase):
         ]
         self.assertEqual(ex, configs.write.call_args_list)
         self.service_restart.assert_called_with('nova-compute')
+
+        is_broker_action_done.return_value = True
+        mark_broker_action_done.reset_mock()
+        hooks.ceph_changed()
+        self.assertFalse(mark_broker_action_done.called)
 
     @patch('charmhelpers.contrib.storage.linux.ceph.CephBrokerRq'
            '.add_op_request_access_to_group')
@@ -734,3 +748,46 @@ class NovaComputeRelationsTests(CharmTestCase):
         mock_kv.set.assert_called_with('restart-nonce',
                                        'nonce')
         self.assertTrue(mock_kv.flush.called)
+
+    def test_ceph_access_incomplete(self):
+        self.relation_get.return_value = None
+        self.test_config.set('virt-type', 'kvm')
+        hooks.ceph_access()
+        self.relation_get.assert_has_calls([
+            call('key', None, None),
+            call('secret-uuid', None, None),
+        ])
+        self.render.assert_not_called()
+        self.create_libvirt_secret.assert_not_called()
+
+    def test_ceph_access_lxd(self):
+        self.relation_get.side_effect = ['mykey', 'uuid2']
+        self.test_config.set('virt-type', 'lxd')
+        hooks.ceph_access()
+        self.relation_get.assert_has_calls([
+            call('key', None, None),
+            call('secret-uuid', None, None),
+        ])
+        self.render.assert_not_called()
+        self.create_libvirt_secret.assert_not_called()
+
+    def test_ceph_access_complete(self):
+        self.relation_get.side_effect = ['mykey', 'uuid2']
+        self.remote_service_name.return_value = 'cinder-ceph'
+        self.test_config.set('virt-type', 'kvm')
+        hooks.ceph_access()
+        self.relation_get.assert_has_calls([
+            call('key', None, None),
+            call('secret-uuid', None, None),
+        ])
+        self.render.assert_called_with(
+            'secret.xml',
+            '/etc/ceph/secret-cinder-ceph.xml',
+            context={'ceph_secret_uuid': 'uuid2',
+                     'service_name': 'cinder-ceph'}
+        )
+        self.create_libvirt_secret.assert_called_with(
+            secret_file='/etc/ceph/secret-cinder-ceph.xml',
+            secret_uuid='uuid2',
+            key='mykey',
+        )

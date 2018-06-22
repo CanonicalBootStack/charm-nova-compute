@@ -226,18 +226,18 @@ options:
     type: string
     default:
     description: |
-      Set to 'host-model' to clone the host CPU feature flags; to 
-      'host-passthrough' to use the host CPU model exactly; to 'custom' to 
-      use a named CPU model; to 'none' to not set any CPU model. If 
-      virt_type='kvm|qemu', it will default to 'host-model', otherwise it will 
+      Set to 'host-model' to clone the host CPU feature flags; to
+      'host-passthrough' to use the host CPU model exactly; to 'custom' to
+      use a named CPU model; to 'none' to not set any CPU model. If
+      virt_type='kvm|qemu', it will default to 'host-model', otherwise it will
       default to 'none'.  Defaults to 'host-passthrough' for ppc64el, ppc64le
       if no value is set.
   cpu-model:
     type: string
     default:
     description: |
-      Set to a named libvirt CPU model (see names listed in 
-      /usr/share/libvirt/cpu_map.xml). Only has effect if cpu_mode='custom' and 
+      Set to a named libvirt CPU model (see names listed in
+      /usr/share/libvirt/cpu_map.xml). Only has effect if cpu_mode='custom' and
       virt_type='kvm|qemu'.
   # Storage configuration options
   libvirt-image-backend:
@@ -308,6 +308,13 @@ options:
       For a systemd system (wily and later) the prefered approach is to enable
       hugepages via kernel parameters set in MAAS and systemd will mount them
       automatically.
+  ksm:
+    type: string
+    default: "AUTO"
+    description: |
+      Set to 1 to enable KSM, 0 to disable KSM, and AUTO to use default settings.
+      Please note that the AUTO value works for qemu 2.2+ (> Kilo), older
+      releases will be set to 1 as default.
   action-managed-upgrade:
     type: boolean
     default: False

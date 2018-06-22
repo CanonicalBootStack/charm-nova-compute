@@ -272,6 +272,7 @@ LIBVIRT_RESOURCE_MAP = {
 LIBVIRT_RESOURCE_MAP.update(BASE_RESOURCE_MAP)
 
 CEPH_SECRET = '/etc/ceph/secret.xml'
+CEPH_BACKEND_SECRET = '/etc/ceph/secret-{}.xml'
 
 CEPH_RESOURCES = {
     CEPH_SECRET: {
@@ -645,6 +646,7 @@ def create_libvirt_secret(secret_file, secret_uuid, key):
     if secret_uuid in check_output(['virsh', '-c', uri, 'secret-list']):
         old_key = check_output(['virsh', '-c', uri, 'secret-get-value',
                                 secret_uuid])
+        old_key = old_key.strip()
         if old_key == key:
             log('Libvirt secret already exists for uuid %s.' % secret_uuid,
                 level=DEBUG)

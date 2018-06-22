@@ -18,6 +18,7 @@ import platform
 import sys
 import uuid
 import yaml
+import os
 
 
 import charmhelpers.core.unitdata as unitdata
@@ -29,6 +30,7 @@ from charmhelpers.core.hookenv import (
     log,
     ERROR,
     relation_ids,
+    remote_service_name,
     related_units,
     relation_get,
     relation_set,
@@ -36,6 +38,9 @@ from charmhelpers.core.hookenv import (
     unit_get,
     UnregisteredHookError,
     status_set,
+)
+from charmhelpers.core.templating import (
+    render
 )
 from charmhelpers.core.host import (
     service_restart,
@@ -63,6 +68,8 @@ from charmhelpers.contrib.storage.linux.ceph import (
     delete_keyring,
     send_request_if_needed,
     is_request_complete,
+    is_broker_action_done,
+    mark_broker_action_done,
 )
 from charmhelpers.payload.execd import execd_preinstall
 from nova_compute_utils import (
@@ -80,6 +87,7 @@ from nova_compute_utils import (
     register_configs,
     NOVA_CONF,
     ceph_config_file, CEPH_SECRET,
+    CEPH_BACKEND_SECRET,
     enable_shell, disable_shell,
     configure_lxd,
     fix_path_ownership,
@@ -384,8 +392,11 @@ def ceph_changed(rid=None, unit=None):
         log('Request complete')
         # Ensure that nova-compute is restarted since only now can we
         # guarantee that ceph resources are ready, but only if not paused.
-        if not is_unit_paused_set():
+        if (not is_unit_paused_set() and
+                not is_broker_action_done('nova_compute_restart', rid,
+                                          unit)):
             service_restart('nova-compute')
+            mark_broker_action_done('nova_compute_restart', rid, unit)
     else:
         send_request_if_needed(get_ceph_request())
 
@@ -525,6 +536,23 @@ def lxc_changed():
 @restart_on_change(restart_map())
 def designate_changed():
     CONFIGS.write(NOVA_CONF)
+
+
+@hooks.hook('ceph-access-relation-changed')
+def ceph_access(rid=None, unit=None):
+    '''Setup libvirt secret for specific ceph backend access'''
+    key = relation_get('key', unit, rid)
+    uuid = relation_get('secret-uuid', unit, rid)
+    if config('virt-type') in ['kvm', 'qemu', 'lxc'] and key and uuid:
+        secrets_filename = CEPH_BACKEND_SECRET.format(
+            remote_service_name(rid)
+        )
+        render(os.path.basename(CEPH_SECRET), secrets_filename,
+               context={'ceph_secret_uuid': uuid,
+                        'service_name': remote_service_name(rid)})
+        create_libvirt_secret(secret_file=secrets_filename,
+                              secret_uuid=uuid,
+                              key=key)
 
 
 @hooks.hook('update-status')
