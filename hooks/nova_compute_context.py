@@ -15,6 +15,8 @@
 import uuid
 import os
 import platform
+import re
+import json
 
 from charmhelpers.core.unitdata import kv
 from charmhelpers.contrib.openstack import context
@@ -128,6 +130,54 @@ def nova_metadata_requirement():
     return enable, secret
 
 
+def get_network_device():
+    return os.listdir('/sys/class/net')
+
+
+def matches(pattern, list_of_strings):
+    """
+    >>> matches(r'eth', ['eth1', 'veth', 'br1'])
+    ['eth1', 'veth']
+    """
+    if type(pattern) != str \
+            or type(list_of_strings) != list:
+        return []
+
+    regexp = re.compile(pattern)
+    strings_matched = [string for string in list_of_strings
+                       if regexp.search(string)]
+    return strings_matched
+
+
+def expand_network_devices(devices_json_whitelist, devicelist):
+    """
+    >>> expand_network_devices('[{"devname": "eno2",
+    ...                           "physical_network": "physnet1"},
+    ...                          {"devname": "enp13.s0f1",
+    ...                           "physical_network": "physnet2"}]',
+    ...                        '["eno2", "enp139s0f1", "bond1"]')
+    '[{"devname": "eno2", "physical_network": "physnet1"},
+      {"devname": "enp139s0f1", "physical_network": "physnet2"}]'
+    """
+    devices_whitelist = json.loads(devices_json_whitelist)
+    for device in devices_whitelist:
+        if 'devname' in device:
+            devpattern = device['devname']
+            devname = matches(devpattern, devicelist)
+            log("Matched {} ({}) devices for pattern {}, out of "
+                "total ({}): {}".format(devname, len(devname), devpattern,
+                                        len(devicelist), devicelist))
+            if len(devname) != 1:
+                msg = "Need exactly 1 match for {} in device list {}"
+                raise Exception(msg.format(devpattern, devicelist))
+
+            device['devname'] = devname[0]
+
+    result = json.dumps(devices_whitelist)
+    log("Expanded pci passthrough: {}".format(result))
+    return result
+
+
 class LxdContext(context.OSContextGenerator):
     def __call__(self):
         lxd_context = {
@@ -228,7 +278,8 @@ class NovaComputeLibvirtContext(context.OSContextGenerator):
 
         if config('pci-passthrough-whitelist'):
             ctxt['pci_passthrough_whitelist'] = \
-                config('pci-passthrough-whitelist')
+                expand_network_devices(config('pci-passthrough-whitelist'),
+                                       get_network_device())
 
         if config('pci-alias'):
             ctxt['pci_alias'] = config('pci-alias')
